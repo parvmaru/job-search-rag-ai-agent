@@ -20,34 +20,8 @@ from agent.job_agent import JobAgent
 from analytics.skill_gap import compute_skill_gap, get_chunks_text
 from analytics.detailed_analysis import analyze_jd_resume_match
 from analytics.ats_optimizer import analyze_ats_match, create_keywords_chart
-from typing import List, Dict, Any
+from typing import List
 import re
-import json
-
-# ============================================================================
-# DEMO MODE CONFIGURATION
-# ============================================================================
-# DEMO_MODE allows the application to run without Ollama for demonstration
-# purposes. This is useful for:
-# - Showcasing the UI/UX to stakeholders who don't have Ollama installed
-# - Running the app in environments where Ollama cannot be installed
-# - Creating shareable demo links (e.g., Streamlit Cloud) without LLM setup
-# - Testing the UI components independently of the LLM pipeline
-#
-# When DEMO_MODE = True:
-#   - Skips all Ollama API calls
-#   - Returns realistic mock responses based on example outputs
-#   - All UI features remain functional and show demo data
-#
-# When DEMO_MODE = False:
-#   - Uses the full Ollama-based RAG pipeline (production mode)
-#   - Requires Ollama to be running locally
-#   - Provides real AI-powered analysis
-#
-# To enable DEMO_MODE, set environment variable: DEMO_MODE=true
-# Or set it directly here: DEMO_MODE = True
-# ============================================================================
-DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() == 'true'
 
 
 # Page config with custom styling
@@ -221,128 +195,6 @@ if 'selected_resume_name' not in st.session_state:
     st.session_state.selected_resume_name = None
 
 
-def load_cached_demo_data() -> Dict[str, Any]:
-    """
-    Load pre-cached demo data from JSON file.
-    
-    This allows instant display of demo results without any generation.
-    The cached data includes all analysis results, interview questions, analytics, etc.
-    
-    Returns:
-        Dict containing all demo data, or None if file doesn't exist
-    """
-    demo_file = Path("demo_data.json")
-    if demo_file.exists():
-        try:
-            with open(demo_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[WARNING] Could not load demo_data.json: {e}")
-            return None
-    return None
-
-
-def get_demo_analysis_result(jd_name: str, resume_name: str) -> Dict[str, Any]:
-    """
-    Generate a realistic mock analysis result for DEMO_MODE.
-    
-    First tries to load from cached demo_data.json file for instant results.
-    Falls back to generating mock data if cache doesn't exist.
-    
-    Args:
-        jd_name: Name of the job description file
-        resume_name: Name of the resume file
-        
-    Returns:
-        Dict matching the structure returned by agent.answer_question()
-    """
-    # Try to load from cached demo data first
-    cached_data = load_cached_demo_data()
-    if cached_data and 'analysis_result' in cached_data:
-        # Use cached data - this is instant!
-        result = cached_data['analysis_result'].copy()
-        # Update source file names to match current selection
-        for source in result.get('sources', []):
-            if source.get('source') == 'jd_demo.pdf':
-                source['source'] = jd_name if jd_name else 'jd_demo.pdf'
-            if source.get('source') == 'resume_demo.pdf':
-                source['source'] = resume_name if resume_name else 'resume_demo.pdf'
-        return result
-    
-    # Fallback: Generate mock data if cache doesn't exist
-    return {
-        'match_score': 72,
-        'missing_keywords': ['kubernetes', 'docker', 'terraform', 'aws', 'microservices', 'graphql', 'redis', 'elasticsearch'],
-        'matched_keywords': ['python', 'javascript', 'react', 'node.js', 'postgresql', 'mongodb', 'git', 'rest', 'api', 'agile'],
-        'bullet_rewrites': [
-            "Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes",
-            "Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques",
-            "Built RESTful APIs and GraphQL endpoints, measured by serving 1M+ requests daily, by implementing Node.js and Express.js backend services",
-            "Implemented CI/CD pipelines and infrastructure as code, measured by 80% faster deployment cycles, by using Terraform and AWS cloud services",
-            "Led agile development team of 5 engineers, measured by 30% increase in sprint velocity, by implementing scrum methodologies and code review processes"
-        ],
-        'suggested_projects': [
-            {
-                'project_idea': 'Containerized Microservices Application',
-                'technologies': ['Docker', 'Kubernetes', 'Node.js', 'PostgreSQL'],
-                'aligns_with': 'Cloud infrastructure and microservices architecture requirements'
-            },
-            {
-                'project_idea': 'AWS Serverless API with GraphQL',
-                'technologies': ['AWS Lambda', 'GraphQL', 'DynamoDB', 'API Gateway'],
-                'aligns_with': 'Cloud services and modern API development needs'
-            },
-            {
-                'project_idea': 'Infrastructure as Code with Terraform',
-                'technologies': ['Terraform', 'AWS', 'Docker', 'CI/CD'],
-                'aligns_with': 'DevOps and cloud infrastructure requirements'
-            }
-        ],
-        'answer': """## Resume Match Analysis
-
-**Match Score:** 72/100
-
-✅ **Good match** with some areas for improvement.
-
-## 📋 Job Requirements Summary
-
-**Must-Have Skills:** Python, JavaScript, React, Node.js, PostgreSQL, MongoDB, Docker, Kubernetes
-**Tools/Technologies:** AWS, Terraform, GraphQL, Redis, Elasticsearch, Git, REST API
-
-## 🔍 Identified Gaps
-
-**Missing Must-Have Skills:** Kubernetes, Docker, Terraform, AWS, Microservices, GraphQL, Redis, Elasticsearch
-
-## 💡 Recommendations
-
-🔴 **1. Add Cloud Infrastructure Experience**
-   *The job requires AWS, Docker, and Kubernetes experience. Consider adding projects or certifications in these areas.*
-
-🟡 **2. Highlight Microservices Architecture**
-   *Emphasize any distributed systems or microservices work you've done, even if not explicitly labeled as such.*
-
-🟡 **3. Include DevOps Tools**
-   *Add Terraform, CI/CD pipelines, and infrastructure automation to your skills section.*
-
-## ✏️ Suggested Bullet Rewrites (XYZ Format)
-
-**1. Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes**
-   *Original:* Worked on backend services
-   *Why:* Adds specific technologies and quantified impact
-
-**2. Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques**
-   *Original:* Improved database performance
-   *Why:* Includes specific tools and measurable results
-""",
-        'sources': [
-            {'source': jd_name, 'page': 1, 'chunk_id': 0, 'score': 0.85, 'preview': 'Job requirements include Python, JavaScript, React, and cloud infrastructure...'},
-            {'source': jd_name, 'page': 1, 'chunk_id': 1, 'score': 0.82, 'preview': 'Experience with Docker, Kubernetes, and AWS is required...'},
-            {'source': resume_name, 'page': 1, 'chunk_id': 0, 'score': 0.78, 'preview': 'Developed web applications using Python and JavaScript...'},
-            {'source': resume_name, 'page': 1, 'chunk_id': 1, 'score': 0.75, 'preview': 'Worked with databases including PostgreSQL and MongoDB...'}
-        ]
-    }
-
-
 def check_ollama():
     """Check if Ollama is running."""
     try:
@@ -359,29 +211,7 @@ def check_ollama():
 
 
 def generate_interview_questions(agent: JobAgent, jd_name: str) -> List[str]:
-    """
-    Generate interview questions based on JD.
-    
-    In DEMO_MODE, returns mock questions without calling Ollama.
-    """
-    # ========================================================================
-    # DEMO MODE: Return mock interview questions
-    # ========================================================================
-    if DEMO_MODE:
-        return [
-            "Can you walk me through your experience with microservices architecture?",
-            "How have you used Docker and Kubernetes in production environments?",
-            "Describe a time when you had to optimize a slow database query. What was your approach?",
-            "Tell me about your experience with AWS cloud services. Which services have you worked with?",
-            "How do you approach designing RESTful APIs? Can you give an example?",
-            "What's your experience with CI/CD pipelines? Which tools have you used?",
-            "Describe a challenging technical problem you solved recently.",
-            "How do you ensure code quality in a team environment?",
-            "What's your experience with GraphQL? When would you choose it over REST?",
-            "How do you handle system scalability and performance optimization?"
-        ]
-    
-    # Production mode: Retrieve JD context and generate questions
+    """Generate interview questions based on JD."""
     if agent is None or agent.retriever is None:
         return []
     
@@ -671,18 +501,8 @@ with col1:
         st.session_state.selected_jd = selected_jd
         st.session_state.selected_jd_name = selected_jd.name if selected_jd else None
     else:
-        # ============================================================================
-        # DEMO MODE: Auto-create demo JD selection if no files exist
-        # ============================================================================
-        if DEMO_MODE:
-            from pathlib import Path
-            demo_jd = Path("data/jd_demo.pdf")
-            st.session_state.selected_jd = demo_jd
-            st.session_state.selected_jd_name = "jd_demo.pdf"
-            st.info("🎭 **DEMO MODE**: Using demo job description")
-        else:
-            st.error("No job description PDFs found. Upload a JD above or add JD files to /data folder.")
-            st.stop()
+        st.error("No job description PDFs found. Upload a JD above or add JD files to /data folder.")
+        st.stop()
 
 with col2:
     st.markdown("### 📄 Select Resume")
@@ -728,19 +548,9 @@ with col2:
         st.session_state.selected_resume_name = selected_resume.name if selected_resume else None
         st.success(f"✅ {selected_resume.name} selected")
     else:
-        # ============================================================================
-        # DEMO MODE: Auto-create demo resume selection if no files exist
-        # ============================================================================
-        if DEMO_MODE:
-            from pathlib import Path
-            demo_resume = Path("data/resume_demo.pdf")
-            st.session_state.selected_resume = demo_resume
-            st.session_state.selected_resume_name = "resume_demo.pdf"
-            st.info("🎭 **DEMO MODE**: Using demo resume")
-        else:
-            st.warning("No resume found. Upload a resume above.")
-            st.session_state.selected_resume = None
-            st.session_state.selected_resume_name = None
+        st.warning("No resume found. Upload a resume above.")
+        st.session_state.selected_resume = None
+        st.session_state.selected_resume_name = None
 
 st.divider()
 
@@ -802,30 +612,17 @@ if st.button(
             try:
                 selected_jd_name = st.session_state.selected_jd.name if st.session_state.selected_jd else None
                 selected_resume_name = st.session_state.selected_resume.name if st.session_state.selected_resume else "resume.pdf"
-                
-                # ========================================================================
-                # DEMO MODE: Use mock responses instead of calling Ollama
-                # ========================================================================
-                if DEMO_MODE:
-                    # In demo mode, return mock response immediately
-                    result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
-                    st.session_state.analysis_result = result
-                    st.session_state.selected_jd_name = selected_jd_name
-                    st.success("✅ Demo analysis complete! (Using mock data)")
-                    st.balloons()  # Celebration!
-                else:
-                    # Production mode: Call the real agent with Ollama
-                    prompt = f"Compare {selected_resume_name} against {selected_jd_name}"
-                    result = st.session_state.agent.answer_question(
-                        prompt, 
-                        top_k=10,  # Get chunks from selected JD
-                        selected_jd_name=selected_jd_name,
-                        selected_resume_name=selected_resume_name
-                    )
-                    st.session_state.analysis_result = result
-                    st.session_state.selected_jd_name = selected_jd_name
-                    st.success("✅ Analysis complete!")
-                    st.balloons()  # Celebration!
+                prompt = f"Compare {selected_resume_name} against {selected_jd_name}"
+                result = st.session_state.agent.answer_question(
+                    prompt, 
+                    top_k=10,  # Get chunks from selected JD
+                    selected_jd_name=selected_jd_name,
+                    selected_resume_name=selected_resume_name
+                )
+                st.session_state.analysis_result = result
+                st.session_state.selected_jd_name = selected_jd_name
+                st.success("✅ Analysis complete!")
+                st.balloons()  # Celebration!
             except ConnectionError as e:
                 st.error("🔌 **Connection Error**")
                 st.error(str(e))
@@ -986,21 +783,9 @@ if st.session_state.get('analysis_result'):
         st.markdown(f"Questions tailored to **{jd_for_questions}**")
         
         if 'interview_questions' not in st.session_state or st.session_state.get('last_jd') != jd_for_questions:
-            if jd_for_questions and (st.session_state.agent or DEMO_MODE):
-                # ========================================================================
-                # DEMO MODE: Skip Ollama check, allow question generation
-                # ========================================================================
-                if DEMO_MODE:
-                    # In demo mode, generate questions immediately
-                    with st.spinner(f"Generating interview questions for {jd_for_questions}..."):
-                        questions = generate_interview_questions(
-                            st.session_state.agent if st.session_state.agent else None, 
-                            jd_for_questions
-                        )
-                        st.session_state.interview_questions = questions[:10] if questions else []
-                        st.session_state.last_jd = jd_for_questions
-                elif not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
-                    # Production mode: Check Ollama connection
+            if jd_for_questions and st.session_state.agent:
+                # Check Ollama connection first
+                if not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
                     st.warning("⚠️ Ollama is not running. Interview questions require Ollama.")
                     st.info("💡 To generate interview questions:\n1. Open PowerShell\n2. Run: `ollama serve`\n3. Wait for 'Ollama is running'\n4. Refresh this page")
                     st.session_state.interview_questions = []
