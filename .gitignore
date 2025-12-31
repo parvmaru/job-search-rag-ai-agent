@@ -37,8 +37,8 @@ db/
 *.index
 *.faiss
 
-# Data files (optional - uncomment if you don't want to commit PDFs)
-# data/*.pdf
+# Data files
+data/
 
 # Streamlit
 .streamlit/
