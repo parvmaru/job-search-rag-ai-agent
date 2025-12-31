@@ -773,8 +773,8 @@ if st.session_state.get('analysis_result'):
         st.markdown("### 📈 Skill Gap Analytics")
         st.markdown("Fast keyword-based analysis of skills overlap and gaps")
         
-        # Get JD and Resume chunks for analytics (production mode)
-        elif st.session_state.agent and st.session_state.selected_jd:
+        # Get JD and Resume chunks for analytics
+        if st.session_state.agent and st.session_state.selected_jd:
             with st.spinner("🔍 Computing skill gap analytics..."):
                 try:
                     # Get selected JD and Resume names
