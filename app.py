@@ -371,63 +371,38 @@ with st.sidebar:
 
 
 # Main content
-# ============================================================================
-# DEMO MODE: Skip index requirement - allow app to run without index
-# ============================================================================
-if not index_exists and not DEMO_MODE:
+if not index_exists:
     st.info("👈 Build an index first using the sidebar button")
     st.stop()
-elif DEMO_MODE and not index_exists:
-    # In demo mode, show info but don't stop
-    st.info("🎭 **DEMO MODE**: Index not required. Demo data will be shown automatically.")
 
 # Initialize components
-# ============================================================================
-# DEMO MODE: Skip retriever initialization if index doesn't exist
-# ============================================================================
 if st.session_state.retriever is None:
-    if DEMO_MODE and not index_exists:
-        # In demo mode, we don't need a real retriever - set to None
-        st.session_state.retriever = None
-    else:
-        try:
-            st.session_state.retriever = FAISSRetriever()
-        except FileNotFoundError as e:
-            st.error(str(e))
-            st.stop()
+    try:
+        st.session_state.retriever = FAISSRetriever()
+    except FileNotFoundError as e:
+        st.error(str(e))
+        st.stop()
 
-# ============================================================================
-# DEMO MODE: Skip Ollama initialization if in demo mode
-# ============================================================================
-if DEMO_MODE:
-    # In demo mode, we don't need Ollama - create dummy client for compatibility
-    st.session_state.llm_client = None
-    st.session_state.agent = None
-    ollama_status = True  # Allow comparison in demo mode
-    # Show demo mode indicator
-    st.info("🎭 **DEMO MODE ACTIVE** - Using mock responses. No Ollama required. Set DEMO_MODE=false to use real AI analysis.")
-else:
-    # Production mode: Initialize Ollama as usual
+if st.session_state.llm_client is None:
+    st.session_state.llm_client = check_ollama()
     if st.session_state.llm_client is None:
-        st.session_state.llm_client = check_ollama()
-        if st.session_state.llm_client is None:
-            st.error("⚠️ **Ollama is not running**")
-            st.markdown("""
-            **To start Ollama:**
-            1. Open a new PowerShell/terminal window
-            2. Run: `ollama serve`
-            3. Wait for "Ollama is running" message
-            4. Click "Rerun" button above or refresh this page
-            """)
-            st.stop()
+        st.error("⚠️ **Ollama is not running**")
+        st.markdown("""
+        **To start Ollama:**
+        1. Open a new PowerShell/terminal window
+        2. Run: `ollama serve`
+        3. Wait for "Ollama is running" message
+        4. Click "Rerun" button above or refresh this page
+        """)
+        st.stop()
 
-    if st.session_state.agent is None:
-        st.session_state.agent = JobAgent(st.session_state.retriever, st.session_state.llm_client)
+if st.session_state.agent is None:
+    st.session_state.agent = JobAgent(st.session_state.retriever, st.session_state.llm_client)
 
-    # Check Ollama connection before allowing comparison
-    ollama_status = st.session_state.llm_client.check_connection() if st.session_state.llm_client else False
-    if not ollama_status:
-        st.warning("⚠️ **Ollama connection lost** - Please ensure Ollama is running (`ollama serve`) before comparing.")
+# Check Ollama connection before allowing comparison
+ollama_status = st.session_state.llm_client.check_connection() if st.session_state.llm_client else False
+if not ollama_status:
+    st.warning("⚠️ **Ollama connection lost** - Please ensure Ollama is running (`ollama serve`) before comparing.")
 
 # File Upload Section
 st.markdown("### 📤 Upload Documents")
