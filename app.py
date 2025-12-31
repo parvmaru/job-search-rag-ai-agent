@@ -624,26 +624,28 @@ st.divider()
 # ============================================================================
 # DEMO MODE: Auto-load demo results when page loads (no button click needed)
 # ============================================================================
-if DEMO_MODE and st.session_state.selected_jd and st.session_state.selected_resume:
+if DEMO_MODE:
+    # Ensure we have demo selections (even if no files exist)
+    if not st.session_state.get('selected_jd_name'):
+        st.session_state.selected_jd_name = "jd_demo.pdf"
+    if not st.session_state.get('selected_resume_name'):
+        st.session_state.selected_resume_name = "resume_demo.pdf"
+    
     # Auto-load demo results if not already loaded
     if not st.session_state.get('analysis_result'):
-        selected_jd_name = st.session_state.selected_jd.name if st.session_state.selected_jd else None
-        selected_resume_name = st.session_state.selected_resume.name if st.session_state.selected_resume else "resume.pdf"
+        selected_jd_name = st.session_state.get('selected_jd_name', 'jd_demo.pdf')
+        selected_resume_name = st.session_state.get('selected_resume_name', 'resume_demo.pdf')
         
         # Load demo results immediately
         demo_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
         st.session_state.analysis_result = demo_result
-        st.session_state.selected_jd_name = selected_jd_name
-        st.session_state.selected_resume_name = selected_resume_name
         
         # Also set interview questions for demo
         st.session_state.interview_questions = generate_interview_questions(None, selected_jd_name)
         st.session_state.last_jd = selected_jd_name
         
-        # Auto-refresh to show results (only once)
-        if 'demo_loaded' not in st.session_state:
-            st.session_state.demo_loaded = True
-            st.rerun()
+        # Show success message
+        st.success("✅ **Demo analysis loaded!** Scroll down to see all results.")
 
 # Compare button - require Ollama, JD, and Resume selection
 # In DEMO_MODE, button is optional since results auto-load
