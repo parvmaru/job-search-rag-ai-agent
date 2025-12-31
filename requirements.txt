@@ -1,0 +1,12 @@
+streamlit
+python-dotenv
+pypdf
+pandas
+numpy
+scikit-learn
+plotly
+faiss-cpu
+sentence-transformers
+openai
+requests
+huggingface-hub>=0.34.0,<1.0
