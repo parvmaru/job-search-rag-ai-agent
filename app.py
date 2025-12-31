@@ -773,55 +773,6 @@ if st.session_state.get('analysis_result'):
         st.markdown("### 📈 Skill Gap Analytics")
         st.markdown("Fast keyword-based analysis of skills overlap and gaps")
         
-        # ============================================================================
-        # DEMO MODE: Use cached analytics data
-        # ============================================================================
-        # Get analytics data from production pipeline
-            # Display cached analytics data
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Match Score", f"{gap_analysis.get('overlap_percentage', 72)}%")
-            with col2:
-                st.metric("JD Keywords", gap_analysis.get('jd_keyword_count', 25))
-            with col3:
-                st.metric("Resume Keywords", gap_analysis.get('resume_keyword_count', 18))
-            
-            # Show charts using cached data
-            if gap_analysis.get('missing_keywords_with_freq'):
-                st.markdown("#### Top Missing Keywords (by frequency in JD)")
-                df_missing = pd.DataFrame(
-                    gap_analysis['missing_keywords_with_freq'],
-                    columns=['Keyword', 'Frequency']
-                )
-                fig_bar = px.bar(
-                    df_missing.head(15),
-                    x='Frequency',
-                    y='Keyword',
-                    orientation='h',
-                    color='Frequency',
-                    color_continuous_scale='Reds',
-                    title='Top 15 Missing Keywords'
-                )
-                fig_bar.update_layout(
-                    height=500,
-                    yaxis={'categoryorder': 'total ascending'},
-                    xaxis_title="Frequency in Job Description",
-                    yaxis_title="Keywords"
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
-                
-                # Display missing keywords list
-                with st.expander("📋 All Missing Keywords"):
-                    for keyword, freq in gap_analysis['missing_keywords_with_freq']:
-                        st.write(f"• **{keyword}** (appears {freq} time{'s' if freq > 1 else ''} in JD)")
-            
-            if gap_analysis.get('present_keywords'):
-                st.markdown("---")
-                st.markdown("#### ✅ Present Keywords (Good Matches)")
-                present_text = ", ".join(gap_analysis['present_keywords'][:30])
-                st.info(present_text)
-                if len(gap_analysis['present_keywords']) > 30:
-                    st.caption(f"... and {len(gap_analysis['present_keywords']) - 30} more")
         # Get JD and Resume chunks for analytics (production mode)
         elif st.session_state.agent and st.session_state.selected_jd:
             with st.spinner("🔍 Computing skill gap analytics..."):
@@ -945,47 +896,6 @@ if st.session_state.get('analysis_result'):
         else:
             st.info(f"📄 **Analyzing:** JD = `{analysis_jd}` | Resume = `{analysis_resume}`")
             
-            # ============================================================================
-            # DEMO MODE: Use cached ATS analysis data
-            # ============================================================================
-            # Get ATS analysis from production pipeline
-                
-                # Display keyword density
-                st.markdown("---")
-                st.markdown("#### 📊 Keyword Density")
-                st.metric("Overall Keyword Density", f"{ats_analysis.get('keyword_density', 3.2):.1f}%")
-                st.caption("Higher density = better ATS match (aim for 2-5%)")
-                
-                # Display keywords to add
-                keywords_to_add = ats_analysis.get('keywords_to_add', [])
-                if keywords_to_add:
-                    st.markdown("---")
-                    st.markdown(f"#### 🔑 Top Keywords to Add (Ranked by Priority)")
-                    st.markdown(f"**Top {min(20, len(keywords_to_add))} Missing Keywords:**")
-                    
-                    for i, kw_data in enumerate(keywords_to_add[:20], 1):
-                        col1, col2, col3 = st.columns([3, 1, 2])
-                        with col1:
-                            st.markdown(f"**{i}. {kw_data['keyword']}**")
-                        with col2:
-                            priority = kw_data.get('priority', 'medium')
-                            priority_color = '🔴' if priority == 'high' else '🟡' if priority == 'medium' else '🟢'
-                            st.markdown(f"{priority_color} {priority.upper()}")
-                        with col3:
-                            st.caption(f"Freq: {kw_data.get('frequency', 0)} | Section: {kw_data.get('suggested_section', 'Skills')}")
-                    
-                    if len(keywords_to_add) > 20:
-                        with st.expander(f"📋 View All {len(keywords_to_add)} Missing Keywords"):
-                            for i, kw_data in enumerate(keywords_to_add[20:], 21):
-                                st.markdown(f"{i}. **{kw_data['keyword']}** (Freq: {kw_data['frequency']}, Section: {kw_data['suggested_section']})")
-                
-                # Display suggested sections
-                suggested_sections = ats_analysis.get('suggested_sections', [])
-                if suggested_sections:
-                    st.markdown("---")
-                    st.markdown("#### 💡 Suggested Resume Sections")
-                    for i, section in enumerate(suggested_sections, 1):
-                        st.info(f"{i}. {section}")
             # Check cache for ATS analysis (production mode)
             elif 'ats_analysis' not in st.session_state or st.session_state.get('ats_cache_key') != f"ats_{analysis_jd}_{analysis_resume}":
                 st.session_state.ats_cache_key = ats_cache_key
