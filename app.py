@@ -418,17 +418,30 @@ with st.sidebar:
 
 
 # Main content
-if not index_exists:
+# ============================================================================
+# DEMO MODE: Skip index requirement - allow app to run without index
+# ============================================================================
+if not index_exists and not DEMO_MODE:
     st.info("👈 Build an index first using the sidebar button")
     st.stop()
+elif DEMO_MODE and not index_exists:
+    # In demo mode, show info but don't stop
+    st.info("🎭 **DEMO MODE**: Index not required. Demo data will be shown automatically.")
 
 # Initialize components
+# ============================================================================
+# DEMO MODE: Skip retriever initialization if index doesn't exist
+# ============================================================================
 if st.session_state.retriever is None:
-    try:
-        st.session_state.retriever = FAISSRetriever()
-    except FileNotFoundError as e:
-        st.error(str(e))
-        st.stop()
+    if DEMO_MODE and not index_exists:
+        # In demo mode, we don't need a real retriever - set to None
+        st.session_state.retriever = None
+    else:
+        try:
+            st.session_state.retriever = FAISSRetriever()
+        except FileNotFoundError as e:
+            st.error(str(e))
+            st.stop()
 
 # ============================================================================
 # DEMO MODE: Skip Ollama initialization if in demo mode
@@ -535,12 +548,33 @@ with col1:
         st.session_state.selected_jd = selected_jd
         st.session_state.selected_jd_name = selected_jd.name if selected_jd else None
     else:
-        st.error("No job description PDFs found. Upload a JD above or add JD files to /data folder.")
-        st.stop()
+        # ============================================================================
+        # DEMO MODE: Auto-create demo JD selection if no files exist
+        # ============================================================================
+        if DEMO_MODE:
+            from pathlib import Path
+            demo_jd = Path("data/jd_demo.pdf")
+            st.session_state.selected_jd = demo_jd
+            st.session_state.selected_jd_name = "jd_demo.pdf"
+            st.info("🎭 **DEMO MODE**: Using demo job description")
+        else:
+            st.error("No job description PDFs found. Upload a JD above or add JD files to /data folder.")
+            st.stop()
 
 with col2:
     st.markdown("### 📄 Select Resume")
     st.caption("💡 Choose which resume to analyze against the selected JD")
+    # ============================================================================
+    # DEMO MODE: Create demo resume file if none exist
+    # ============================================================================
+    if DEMO_MODE and not resume_files:
+        # Create a demo resume file entry for demo mode
+        from pathlib import Path
+        demo_resume = Path("data/resume_demo.pdf")
+        if demo_resume.exists() or True:  # Always show demo option
+            resume_files = [demo_resume]
+            st.info("🎭 **DEMO MODE**: Using demo resume")
+    
     if resume_files:
         # Initialize selected_resume in session state
         if 'selected_resume' not in st.session_state:
@@ -571,14 +605,49 @@ with col2:
         st.session_state.selected_resume_name = selected_resume.name if selected_resume else None
         st.success(f"✅ {selected_resume.name} selected")
     else:
-        st.warning("No resume found. Upload a resume above.")
-        st.session_state.selected_resume = None
-        st.session_state.selected_resume_name = None
+        # ============================================================================
+        # DEMO MODE: Auto-create demo resume selection if no files exist
+        # ============================================================================
+        if DEMO_MODE:
+            from pathlib import Path
+            demo_resume = Path("data/resume_demo.pdf")
+            st.session_state.selected_resume = demo_resume
+            st.session_state.selected_resume_name = "resume_demo.pdf"
+            st.info("🎭 **DEMO MODE**: Using demo resume")
+        else:
+            st.warning("No resume found. Upload a resume above.")
+            st.session_state.selected_resume = None
+            st.session_state.selected_resume_name = None
 
 st.divider()
 
+# ============================================================================
+# DEMO MODE: Auto-load demo results when page loads (no button click needed)
+# ============================================================================
+if DEMO_MODE and st.session_state.selected_jd and st.session_state.selected_resume:
+    # Auto-load demo results if not already loaded
+    if not st.session_state.get('analysis_result'):
+        selected_jd_name = st.session_state.selected_jd.name if st.session_state.selected_jd else None
+        selected_resume_name = st.session_state.selected_resume.name if st.session_state.selected_resume else "resume.pdf"
+        
+        # Load demo results immediately
+        demo_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
+        st.session_state.analysis_result = demo_result
+        st.session_state.selected_jd_name = selected_jd_name
+        st.session_state.selected_resume_name = selected_resume_name
+        
+        # Also set interview questions for demo
+        st.session_state.interview_questions = generate_interview_questions(None, selected_jd_name)
+        st.session_state.last_jd = selected_jd_name
+        
+        # Auto-refresh to show results (only once)
+        if 'demo_loaded' not in st.session_state:
+            st.session_state.demo_loaded = True
+            st.rerun()
+
 # Compare button - require Ollama, JD, and Resume selection
-compare_disabled = not ollama_status or not st.session_state.selected_jd or not st.session_state.selected_resume
+# In DEMO_MODE, button is optional since results auto-load
+compare_disabled = (not DEMO_MODE and not ollama_status) or not st.session_state.selected_jd or not st.session_state.selected_resume
 
 if st.button(
     "🚀 Compare Resume vs Selected JD", 
