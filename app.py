@@ -482,17 +482,6 @@ with col1:
 with col2:
     st.markdown("### 📄 Select Resume")
     st.caption("💡 Choose which resume to analyze against the selected JD")
-    # ============================================================================
-    # DEMO MODE: Create demo resume file if none exist
-    # ============================================================================
-    if DEMO_MODE and not resume_files:
-        # Create a demo resume file entry for demo mode
-        from pathlib import Path
-        demo_resume = Path("data/resume_demo.pdf")
-        if demo_resume.exists() or True:  # Always show demo option
-            resume_files = [demo_resume]
-            st.info("🎭 **DEMO MODE**: Using demo resume")
-    
     if resume_files:
         # Initialize selected_resume in session state
         if 'selected_resume' not in st.session_state:
@@ -529,43 +518,8 @@ with col2:
 
 st.divider()
 
-# ============================================================================
-# DEMO MODE: Auto-load demo results when page loads (no button click needed)
-# ============================================================================
-if DEMO_MODE:
-    # Ensure we have demo selections (even if no files exist)
-    if not st.session_state.get('selected_jd_name'):
-        st.session_state.selected_jd_name = "jd_demo.pdf"
-    if not st.session_state.get('selected_resume_name'):
-        st.session_state.selected_resume_name = "resume_demo.pdf"
-    
-    # Auto-load cached demo results if not already loaded
-    if not st.session_state.get('analysis_result'):
-        selected_jd_name = st.session_state.get('selected_jd_name', 'jd_demo.pdf')
-        selected_resume_name = st.session_state.get('selected_resume_name', 'resume_demo.pdf')
-        
-        # Load from cached demo data (instant, no generation)
-        cached_data = load_cached_demo_data()
-        if cached_data:
-            # Load all cached results instantly from JSON file
-            st.session_state.analysis_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
-            st.session_state.interview_questions = cached_data.get('interview_questions', [])
-            st.session_state.last_jd = selected_jd_name
-            st.session_state.demo_analytics = cached_data.get('analytics', {})
-            st.session_state.demo_ats_analysis = cached_data.get('ats_analysis', {})
-            
-            st.success("✅ **Demo results loaded from cache!** All data ready instantly.")
-        else:
-            # Fallback: Generate demo data if cache doesn't exist
-            demo_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
-            st.session_state.analysis_result = demo_result
-            st.session_state.interview_questions = generate_interview_questions(None, selected_jd_name)
-            st.session_state.last_jd = selected_jd_name
-            st.warning("⚠️ Using generated demo data. Create demo_data.json for faster loading.")
-
 # Compare button - require Ollama, JD, and Resume selection
-# In DEMO_MODE, button is optional since results auto-load
-compare_disabled = (not DEMO_MODE and not ollama_status) or not st.session_state.selected_jd or not st.session_state.selected_resume
+compare_disabled = not ollama_status or not st.session_state.selected_jd or not st.session_state.selected_resume
 
 if st.button(
     "🚀 Compare Resume vs Selected JD", 
@@ -822,8 +776,7 @@ if st.session_state.get('analysis_result'):
         # ============================================================================
         # DEMO MODE: Use cached analytics data
         # ============================================================================
-        if DEMO_MODE and st.session_state.get('demo_analytics'):
-            gap_analysis = st.session_state.demo_analytics
+        # Get analytics data from production pipeline
             # Display cached analytics data
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -995,8 +948,7 @@ if st.session_state.get('analysis_result'):
             # ============================================================================
             # DEMO MODE: Use cached ATS analysis data
             # ============================================================================
-            if DEMO_MODE and st.session_state.get('demo_ats_analysis'):
-                ats_analysis = st.session_state.demo_ats_analysis
+            # Get ATS analysis from production pipeline
                 
                 # Display keyword density
                 st.markdown("---")
