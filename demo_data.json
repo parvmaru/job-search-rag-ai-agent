@@ -1,0 +1,164 @@
+{
+  "analysis_result": {
+    "match_score": 72,
+    "missing_keywords": [
+      "kubernetes",
+      "docker",
+      "terraform",
+      "aws",
+      "microservices",
+      "graphql",
+      "redis",
+      "elasticsearch"
+    ],
+    "matched_keywords": [
+      "python",
+      "javascript",
+      "react",
+      "node.js",
+      "postgresql",
+      "mongodb",
+      "git",
+      "rest",
+      "api",
+      "agile"
+    ],
+    "bullet_rewrites": [
+      "Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes",
+      "Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques",
+      "Built RESTful APIs and GraphQL endpoints, measured by serving 1M+ requests daily, by implementing Node.js and Express.js backend services",
+      "Implemented CI/CD pipelines and infrastructure as code, measured by 80% faster deployment cycles, by using Terraform and AWS cloud services",
+      "Led agile development team of 5 engineers, measured by 30% increase in sprint velocity, by implementing scrum methodologies and code review processes"
+    ],
+    "suggested_projects": [
+      {
+        "project_idea": "Containerized Microservices Application",
+        "technologies": ["Docker", "Kubernetes", "Node.js", "PostgreSQL"],
+        "aligns_with": "Cloud infrastructure and microservices architecture requirements"
+      },
+      {
+        "project_idea": "AWS Serverless API with GraphQL",
+        "technologies": ["AWS Lambda", "GraphQL", "DynamoDB", "API Gateway"],
+        "aligns_with": "Cloud services and modern API development needs"
+      },
+      {
+        "project_idea": "Infrastructure as Code with Terraform",
+        "technologies": ["Terraform", "AWS", "Docker", "CI/CD"],
+        "aligns_with": "DevOps and cloud infrastructure requirements"
+      }
+    ],
+    "answer": "## Resume Match Analysis\n\n**Match Score:** 72/100\n\n✅ **Good match** with some areas for improvement.\n\n## 📋 Job Requirements Summary\n\n**Must-Have Skills:** Python, JavaScript, React, Node.js, PostgreSQL, MongoDB, Docker, Kubernetes\n**Tools/Technologies:** AWS, Terraform, GraphQL, Redis, Elasticsearch, Git, REST API\n\n## 🔍 Identified Gaps\n\n**Missing Must-Have Skills:** Kubernetes, Docker, Terraform, AWS, Microservices, GraphQL, Redis, Elasticsearch\n\n## 💡 Recommendations\n\n🔴 **1. Add Cloud Infrastructure Experience**\n   *The job requires AWS, Docker, and Kubernetes experience. Consider adding projects or certifications in these areas.*\n\n🟡 **2. Highlight Microservices Architecture**\n   *Emphasize any distributed systems or microservices work you've done, even if not explicitly labeled as such.*\n\n🟡 **3. Include DevOps Tools**\n   *Add Terraform, CI/CD pipelines, and infrastructure automation to your skills section.*\n\n## ✏️ Suggested Bullet Rewrites (XYZ Format)\n\n**1. Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes**\n   *Original:* Worked on backend services\n   *Why:* Adds specific technologies and quantified impact\n\n**2. Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques**\n   *Original:* Improved database performance\n   *Why:* Includes specific tools and measurable results",
+    "sources": [
+      {
+        "source": "jd_demo.pdf",
+        "page": 1,
+        "chunk_id": 0,
+        "score": 0.85,
+        "preview": "Job requirements include Python, JavaScript, React, and cloud infrastructure..."
+      },
+      {
+        "source": "jd_demo.pdf",
+        "page": 1,
+        "chunk_id": 1,
+        "score": 0.82,
+        "preview": "Experience with Docker, Kubernetes, and AWS is required..."
+      },
+      {
+        "source": "resume_demo.pdf",
+        "page": 1,
+        "chunk_id": 0,
+        "score": 0.78,
+        "preview": "Developed web applications using Python and JavaScript..."
+      },
+      {
+        "source": "resume_demo.pdf",
+        "page": 1,
+        "chunk_id": 1,
+        "score": 0.75,
+        "preview": "Worked with databases including PostgreSQL and MongoDB..."
+      }
+    ]
+  },
+  "interview_questions": [
+    "Can you walk me through your experience with microservices architecture?",
+    "How have you used Docker and Kubernetes in production environments?",
+    "Describe a time when you had to optimize a slow database query. What was your approach?",
+    "Tell me about your experience with AWS cloud services. Which services have you worked with?",
+    "How do you approach designing RESTful APIs? Can you give an example?",
+    "What's your experience with CI/CD pipelines? Which tools have you used?",
+    "Describe a challenging technical problem you solved recently.",
+    "How do you ensure code quality in a team environment?",
+    "What's your experience with GraphQL? When would you choose it over REST?",
+    "How do you handle system scalability and performance optimization?"
+  ],
+  "analytics": {
+    "overlap_percentage": 72.0,
+    "missing_percentage": 28.0,
+    "jd_keyword_count": 25,
+    "resume_keyword_count": 18,
+    "overlap_count": 10,
+    "present_keywords": [
+      "python",
+      "javascript",
+      "react",
+      "node.js",
+      "postgresql",
+      "mongodb",
+      "git",
+      "rest",
+      "api",
+      "agile"
+    ],
+    "missing_keywords_with_freq": [
+      ["kubernetes", 8],
+      ["docker", 7],
+      ["aws", 6],
+      ["terraform", 5],
+      ["microservices", 4],
+      ["graphql", 3],
+      ["redis", 3],
+      ["elasticsearch", 2]
+    ]
+  },
+  "ats_analysis": {
+    "keyword_density": 3.2,
+    "keywords_to_add": [
+      {
+        "keyword": "kubernetes",
+        "frequency": 8,
+        "priority": "high",
+        "suggested_section": "Skills"
+      },
+      {
+        "keyword": "docker",
+        "frequency": 7,
+        "priority": "high",
+        "suggested_section": "Skills"
+      },
+      {
+        "keyword": "aws",
+        "frequency": 6,
+        "priority": "high",
+        "suggested_section": "Experience"
+      },
+      {
+        "keyword": "terraform",
+        "frequency": 5,
+        "priority": "medium",
+        "suggested_section": "Skills"
+      },
+      {
+        "keyword": "microservices",
+        "frequency": 4,
+        "priority": "medium",
+        "suggested_section": "Experience"
+      }
+    ],
+    "suggested_sections": [
+      "Add a 'Cloud & DevOps' section highlighting AWS, Docker, Kubernetes experience",
+      "Include 'Infrastructure' section mentioning Terraform and CI/CD",
+      "Add 'Architecture' section discussing microservices and distributed systems"
+    ]
+  }
+}
+

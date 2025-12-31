@@ -22,6 +22,7 @@ from analytics.detailed_analysis import analyze_jd_resume_match
 from analytics.ats_optimizer import analyze_ats_match, create_keywords_chart
 from typing import List, Dict, Any
 import re
+import json
 
 # ============================================================================
 # DEMO MODE CONFIGURATION
@@ -631,21 +632,29 @@ if DEMO_MODE:
     if not st.session_state.get('selected_resume_name'):
         st.session_state.selected_resume_name = "resume_demo.pdf"
     
-    # Auto-load demo results if not already loaded
+    # Auto-load cached demo results if not already loaded
     if not st.session_state.get('analysis_result'):
         selected_jd_name = st.session_state.get('selected_jd_name', 'jd_demo.pdf')
         selected_resume_name = st.session_state.get('selected_resume_name', 'resume_demo.pdf')
         
-        # Load demo results immediately
-        demo_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
-        st.session_state.analysis_result = demo_result
-        
-        # Also set interview questions for demo
-        st.session_state.interview_questions = generate_interview_questions(None, selected_jd_name)
-        st.session_state.last_jd = selected_jd_name
-        
-        # Show success message
-        st.success("✅ **Demo analysis loaded!** Scroll down to see all results.")
+        # Load from cached demo data (instant, no generation)
+        cached_data = load_cached_demo_data()
+        if cached_data:
+            # Load all cached results instantly from JSON file
+            st.session_state.analysis_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
+            st.session_state.interview_questions = cached_data.get('interview_questions', [])
+            st.session_state.last_jd = selected_jd_name
+            st.session_state.demo_analytics = cached_data.get('analytics', {})
+            st.session_state.demo_ats_analysis = cached_data.get('ats_analysis', {})
+            
+            st.success("✅ **Demo results loaded from cache!** All data ready instantly.")
+        else:
+            # Fallback: Generate demo data if cache doesn't exist
+            demo_result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
+            st.session_state.analysis_result = demo_result
+            st.session_state.interview_questions = generate_interview_questions(None, selected_jd_name)
+            st.session_state.last_jd = selected_jd_name
+            st.warning("⚠️ Using generated demo data. Create demo_data.json for faster loading.")
 
 # Compare button - require Ollama, JD, and Resume selection
 # In DEMO_MODE, button is optional since results auto-load
@@ -1051,9 +1060,50 @@ if st.session_state.get('analysis_result'):
         else:
             st.info(f"📄 **Analyzing:** JD = `{analysis_jd}` | Resume = `{analysis_resume}`")
             
-            # Check cache for ATS analysis
-            ats_cache_key = f"ats_{analysis_jd}_{analysis_resume}"
-            if 'ats_analysis' not in st.session_state or st.session_state.get('ats_cache_key') != ats_cache_key:
+            # ============================================================================
+            # DEMO MODE: Use cached ATS analysis data
+            # ============================================================================
+            if DEMO_MODE and st.session_state.get('demo_ats_analysis'):
+                ats_analysis = st.session_state.demo_ats_analysis
+                
+                # Display keyword density
+                st.markdown("---")
+                st.markdown("#### 📊 Keyword Density")
+                st.metric("Overall Keyword Density", f"{ats_analysis.get('keyword_density', 3.2):.1f}%")
+                st.caption("Higher density = better ATS match (aim for 2-5%)")
+                
+                # Display keywords to add
+                keywords_to_add = ats_analysis.get('keywords_to_add', [])
+                if keywords_to_add:
+                    st.markdown("---")
+                    st.markdown(f"#### 🔑 Top Keywords to Add (Ranked by Priority)")
+                    st.markdown(f"**Top {min(20, len(keywords_to_add))} Missing Keywords:**")
+                    
+                    for i, kw_data in enumerate(keywords_to_add[:20], 1):
+                        col1, col2, col3 = st.columns([3, 1, 2])
+                        with col1:
+                            st.markdown(f"**{i}. {kw_data['keyword']}**")
+                        with col2:
+                            priority = kw_data.get('priority', 'medium')
+                            priority_color = '🔴' if priority == 'high' else '🟡' if priority == 'medium' else '🟢'
+                            st.markdown(f"{priority_color} {priority.upper()}")
+                        with col3:
+                            st.caption(f"Freq: {kw_data.get('frequency', 0)} | Section: {kw_data.get('suggested_section', 'Skills')}")
+                    
+                    if len(keywords_to_add) > 20:
+                        with st.expander(f"📋 View All {len(keywords_to_add)} Missing Keywords"):
+                            for i, kw_data in enumerate(keywords_to_add[20:], 21):
+                                st.markdown(f"{i}. **{kw_data['keyword']}** (Freq: {kw_data['frequency']}, Section: {kw_data['suggested_section']})")
+                
+                # Display suggested sections
+                suggested_sections = ats_analysis.get('suggested_sections', [])
+                if suggested_sections:
+                    st.markdown("---")
+                    st.markdown("#### 💡 Suggested Resume Sections")
+                    for i, section in enumerate(suggested_sections, 1):
+                        st.info(f"{i}. {section}")
+            # Check cache for ATS analysis (production mode)
+            elif 'ats_analysis' not in st.session_state or st.session_state.get('ats_cache_key') != f"ats_{analysis_jd}_{analysis_resume}":
                 st.session_state.ats_cache_key = ats_cache_key
                 st.session_state.ats_analysis = None
             
