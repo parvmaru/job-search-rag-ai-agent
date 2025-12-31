@@ -897,7 +897,8 @@ if st.session_state.get('analysis_result'):
             st.info(f"📄 **Analyzing:** JD = `{analysis_jd}` | Resume = `{analysis_resume}`")
             
             # Check cache for ATS analysis (production mode)
-            elif 'ats_analysis' not in st.session_state or st.session_state.get('ats_cache_key') != f"ats_{analysis_jd}_{analysis_resume}":
+            ats_cache_key = f"ats_{analysis_jd}_{analysis_resume}"
+            if 'ats_analysis' not in st.session_state or st.session_state.get('ats_cache_key') != ats_cache_key:
                 st.session_state.ats_cache_key = ats_cache_key
                 st.session_state.ats_analysis = None
             
