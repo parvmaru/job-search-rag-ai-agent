@@ -261,12 +261,17 @@ IMPORTANT:
 - Be concise and actionable"""
     
     try:
+        print(f"[DEBUG] Generating interview questions for JD: {jd_name}")
+        print(f"[DEBUG] Prompt length: {len(prompt)}")
         response = agent.llm.generate(prompt, temperature=0.7)
+        print(f"[DEBUG] LLM response received, length: {len(response)}")
     except ConnectionError as e:
-        # Return empty list if Ollama is not available
+        print(f"[ERROR] Connection error generating interview questions: {e}")
         return []
     except Exception as e:
-        print(f"[WARNING] Error generating interview questions: {e}")
+        print(f"[ERROR] Error generating interview questions: {e}")
+        import traceback
+        traceback.print_exc()
         return []
     
     # Parse questions
@@ -278,12 +283,15 @@ IMPORTANT:
         # Match patterns like "1. Question" or "1) Question" or "- Question"
         match = re.match(r'^\d+[.)]\s*(.+)', line)
         if match:
-            questions.append(match.group(1).strip())
-        elif line and line.startswith('-') and len(line) > 10:
+            question_text = match.group(1).strip()
+            if question_text and len(question_text) > 10:
+                questions.append(question_text)
+        elif line and line.startswith('-') and len(line) > 10 and '?' in line:
             questions.append(line[1:].strip())
         elif line and len(line) > 15 and '?' in line and not line.startswith('INTERVIEW'):
             questions.append(line)
     
+    print(f"[DEBUG] Parsed {len(questions)} interview questions")
     return questions[:10]  # Return up to 10 questions
 
 
