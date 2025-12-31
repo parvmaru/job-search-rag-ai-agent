@@ -151,12 +151,17 @@ class JobAgent:
             # Generate bullet rewrites using LLM
             bullet_rewrites = []
             try:
-                if self.llm and self.llm.check_connection():
-                    # Get sample resume bullets (extract from resume text)
-                    resume_bullets = self._extract_resume_bullets(resume_text)
-                    
-                    if resume_bullets:
-                        prompt = f"""You are a resume coach. Rewrite resume bullet points to better match this job description.
+                if self.llm:
+                    # Check connection
+                    if not self.llm.check_connection():
+                        print("[WARNING] LLM connection check failed - skipping bullet rewrite generation")
+                    else:
+                        # Get sample resume bullets (extract from resume text)
+                        resume_bullets = self._extract_resume_bullets(resume_text)
+                        print(f"[DEBUG] Extracted {len(resume_bullets)} resume bullets for rewriting")
+                        
+                        if resume_bullets:
+                            prompt = f"""You are a resume coach. Rewrite resume bullet points to better match this job description.
 
 === JOB DESCRIPTION ===
 {jd_text[:2000]}
@@ -172,14 +177,18 @@ Rewrite 5 resume bullets in XYZ format to better match the job description:
 Format each bullet as a single line starting with a verb. Use phrases and keywords from the job description.
 
 Return ONLY the 5 rewritten bullets, one per line, numbered 1-5. No explanations, no markdown."""
-                        
-                        llm_response = self.llm.generate(prompt, temperature=0.7)
-                        bullet_rewrites = self._parse_bullet_rewrites(llm_response)
-                        print(f"[DEBUG] Generated {len(bullet_rewrites)} bullet rewrites")
+                            
+                            print("[DEBUG] Calling LLM to generate bullet rewrites...")
+                            llm_response = self.llm.generate(prompt, temperature=0.7)
+                            print(f"[DEBUG] LLM response length: {len(llm_response)}")
+                            bullet_rewrites = self._parse_bullet_rewrites(llm_response)
+                            print(f"[DEBUG] Generated {len(bullet_rewrites)} bullet rewrites: {bullet_rewrites}")
+                        else:
+                            print("[WARNING] No resume bullets found to rewrite")
                 else:
-                    print("[WARNING] LLM not available for bullet rewrite generation")
+                    print("[WARNING] LLM client is None - cannot generate bullet rewrites")
             except Exception as e:
-                print(f"[WARNING] Bullet rewrite generation failed: {e}")
+                print(f"[ERROR] Bullet rewrite generation failed: {e}")
                 import traceback
                 traceback.print_exc()
                 bullet_rewrites = []

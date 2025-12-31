@@ -213,6 +213,15 @@ def check_ollama():
 def generate_interview_questions(agent: JobAgent, jd_name: str) -> List[str]:
     """Generate interview questions based on JD."""
     if agent is None or agent.retriever is None:
+        print("[WARNING] Agent or retriever is None - cannot generate interview questions")
+        return []
+    
+    if agent.llm is None:
+        print("[WARNING] LLM client is None - cannot generate interview questions")
+        return []
+    
+    if not agent.llm.check_connection():
+        print("[WARNING] LLM connection check failed - cannot generate interview questions")
         return []
     
     retriever = agent.retriever
@@ -224,6 +233,7 @@ def generate_interview_questions(agent: JobAgent, jd_name: str) -> List[str]:
     )
     
     if not jd_chunks:
+        print(f"[WARNING] No JD chunks found for {jd_name}")
         return []
     
     jd_text = "\n\n".join([chunk['text'] for chunk in jd_chunks[:5]])  # Use top 5 chunks
