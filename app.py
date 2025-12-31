@@ -20,8 +20,33 @@ from agent.job_agent import JobAgent
 from analytics.skill_gap import compute_skill_gap, get_chunks_text
 from analytics.detailed_analysis import analyze_jd_resume_match
 from analytics.ats_optimizer import analyze_ats_match, create_keywords_chart
-from typing import List
+from typing import List, Dict, Any
 import re
+
+# ============================================================================
+# DEMO MODE CONFIGURATION
+# ============================================================================
+# DEMO_MODE allows the application to run without Ollama for demonstration
+# purposes. This is useful for:
+# - Showcasing the UI/UX to stakeholders who don't have Ollama installed
+# - Running the app in environments where Ollama cannot be installed
+# - Creating shareable demo links (e.g., Streamlit Cloud) without LLM setup
+# - Testing the UI components independently of the LLM pipeline
+#
+# When DEMO_MODE = True:
+#   - Skips all Ollama API calls
+#   - Returns realistic mock responses based on example outputs
+#   - All UI features remain functional and show demo data
+#
+# When DEMO_MODE = False:
+#   - Uses the full Ollama-based RAG pipeline (production mode)
+#   - Requires Ollama to be running locally
+#   - Provides real AI-powered analysis
+#
+# To enable DEMO_MODE, set environment variable: DEMO_MODE=true
+# Or set it directly here: DEMO_MODE = True
+# ============================================================================
+DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() == 'true'
 
 
 # Page config with custom styling
@@ -211,8 +236,32 @@ def check_ollama():
 
 
 def generate_interview_questions(agent: JobAgent, jd_name: str) -> List[str]:
-    """Generate interview questions based on JD."""
-    # Retrieve JD context
+    """
+    Generate interview questions based on JD.
+    
+    In DEMO_MODE, returns mock questions without calling Ollama.
+    """
+    # ========================================================================
+    # DEMO MODE: Return mock interview questions
+    # ========================================================================
+    if DEMO_MODE:
+        return [
+            "Can you walk me through your experience with microservices architecture?",
+            "How have you used Docker and Kubernetes in production environments?",
+            "Describe a time when you had to optimize a slow database query. What was your approach?",
+            "Tell me about your experience with AWS cloud services. Which services have you worked with?",
+            "How do you approach designing RESTful APIs? Can you give an example?",
+            "What's your experience with CI/CD pipelines? Which tools have you used?",
+            "Describe a challenging technical problem you solved recently.",
+            "How do you ensure code quality in a team environment?",
+            "What's your experience with GraphQL? When would you choose it over REST?",
+            "How do you handle system scalability and performance optimization?"
+        ]
+    
+    # Production mode: Retrieve JD context and generate questions
+    if agent is None or agent.retriever is None:
+        return []
+    
     retriever = agent.retriever
     jd_chunks = retriever.retrieve(
         "skills tools technologies responsibilities requirements qualifications experience needed",
@@ -381,26 +430,38 @@ if st.session_state.retriever is None:
         st.error(str(e))
         st.stop()
 
-if st.session_state.llm_client is None:
-    st.session_state.llm_client = check_ollama()
+# ============================================================================
+# DEMO MODE: Skip Ollama initialization if in demo mode
+# ============================================================================
+if DEMO_MODE:
+    # In demo mode, we don't need Ollama - create dummy client for compatibility
+    st.session_state.llm_client = None
+    st.session_state.agent = None
+    ollama_status = True  # Allow comparison in demo mode
+    # Show demo mode indicator
+    st.info("🎭 **DEMO MODE ACTIVE** - Using mock responses. No Ollama required. Set DEMO_MODE=false to use real AI analysis.")
+else:
+    # Production mode: Initialize Ollama as usual
     if st.session_state.llm_client is None:
-        st.error("⚠️ **Ollama is not running**")
-        st.markdown("""
-        **To start Ollama:**
-        1. Open a new PowerShell/terminal window
-        2. Run: `ollama serve`
-        3. Wait for "Ollama is running" message
-        4. Click "Rerun" button above or refresh this page
-        """)
-        st.stop()
+        st.session_state.llm_client = check_ollama()
+        if st.session_state.llm_client is None:
+            st.error("⚠️ **Ollama is not running**")
+            st.markdown("""
+            **To start Ollama:**
+            1. Open a new PowerShell/terminal window
+            2. Run: `ollama serve`
+            3. Wait for "Ollama is running" message
+            4. Click "Rerun" button above or refresh this page
+            """)
+            st.stop()
 
-if st.session_state.agent is None:
-    st.session_state.agent = JobAgent(st.session_state.retriever, st.session_state.llm_client)
+    if st.session_state.agent is None:
+        st.session_state.agent = JobAgent(st.session_state.retriever, st.session_state.llm_client)
 
-# Check Ollama connection before allowing comparison
-ollama_status = st.session_state.llm_client.check_connection() if st.session_state.llm_client else False
-if not ollama_status:
-    st.warning("⚠️ **Ollama connection lost** - Please ensure Ollama is running (`ollama serve`) before comparing.")
+    # Check Ollama connection before allowing comparison
+    ollama_status = st.session_state.llm_client.check_connection() if st.session_state.llm_client else False
+    if not ollama_status:
+        st.warning("⚠️ **Ollama connection lost** - Please ensure Ollama is running (`ollama serve`) before comparing.")
 
 # File Upload Section
 st.markdown("### 📤 Upload Documents")
@@ -537,20 +598,32 @@ if st.button(
     else:
         with st.spinner(f"🔍 Analyzing resume match against {st.session_state.selected_jd_name}... This may take 1-2 minutes."):
             try:
-                # Call agent - it will focus on the SELECTED JD and Resume
                 selected_jd_name = st.session_state.selected_jd.name if st.session_state.selected_jd else None
                 selected_resume_name = st.session_state.selected_resume.name if st.session_state.selected_resume else "resume.pdf"
-                prompt = f"Compare {selected_resume_name} against {selected_jd_name}"
-                result = st.session_state.agent.answer_question(
-                    prompt, 
-                    top_k=10,  # Get chunks from selected JD
-                    selected_jd_name=selected_jd_name,
-                    selected_resume_name=selected_resume_name
-                )
-                st.session_state.analysis_result = result
-                st.session_state.selected_jd_name = selected_jd_name
-                st.success("✅ Analysis complete!")
-                st.balloons()  # Celebration!
+                
+                # ========================================================================
+                # DEMO MODE: Use mock responses instead of calling Ollama
+                # ========================================================================
+                if DEMO_MODE:
+                    # In demo mode, return mock response immediately
+                    result = get_demo_analysis_result(selected_jd_name, selected_resume_name)
+                    st.session_state.analysis_result = result
+                    st.session_state.selected_jd_name = selected_jd_name
+                    st.success("✅ Demo analysis complete! (Using mock data)")
+                    st.balloons()  # Celebration!
+                else:
+                    # Production mode: Call the real agent with Ollama
+                    prompt = f"Compare {selected_resume_name} against {selected_jd_name}"
+                    result = st.session_state.agent.answer_question(
+                        prompt, 
+                        top_k=10,  # Get chunks from selected JD
+                        selected_jd_name=selected_jd_name,
+                        selected_resume_name=selected_resume_name
+                    )
+                    st.session_state.analysis_result = result
+                    st.session_state.selected_jd_name = selected_jd_name
+                    st.success("✅ Analysis complete!")
+                    st.balloons()  # Celebration!
             except ConnectionError as e:
                 st.error("🔌 **Connection Error**")
                 st.error(str(e))
@@ -711,9 +784,21 @@ if st.session_state.get('analysis_result'):
         st.markdown(f"Questions tailored to **{jd_for_questions}**")
         
         if 'interview_questions' not in st.session_state or st.session_state.get('last_jd') != jd_for_questions:
-            if jd_for_questions and st.session_state.agent:
-                # Check Ollama connection first
-                if not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
+            if jd_for_questions and (st.session_state.agent or DEMO_MODE):
+                # ========================================================================
+                # DEMO MODE: Skip Ollama check, allow question generation
+                # ========================================================================
+                if DEMO_MODE:
+                    # In demo mode, generate questions immediately
+                    with st.spinner(f"Generating interview questions for {jd_for_questions}..."):
+                        questions = generate_interview_questions(
+                            st.session_state.agent if st.session_state.agent else None, 
+                            jd_for_questions
+                        )
+                        st.session_state.interview_questions = questions[:10] if questions else []
+                        st.session_state.last_jd = jd_for_questions
+                elif not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
+                    # Production mode: Check Ollama connection
                     st.warning("⚠️ Ollama is not running. Interview questions require Ollama.")
                     st.info("💡 To generate interview questions:\n1. Open PowerShell\n2. Run: `ollama serve`\n3. Wait for 'Ollama is running'\n4. Refresh this page")
                     st.session_state.interview_questions = []
