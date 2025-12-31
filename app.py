@@ -221,6 +221,128 @@ if 'selected_resume_name' not in st.session_state:
     st.session_state.selected_resume_name = None
 
 
+def load_cached_demo_data() -> Dict[str, Any]:
+    """
+    Load pre-cached demo data from JSON file.
+    
+    This allows instant display of demo results without any generation.
+    The cached data includes all analysis results, interview questions, analytics, etc.
+    
+    Returns:
+        Dict containing all demo data, or None if file doesn't exist
+    """
+    demo_file = Path("demo_data.json")
+    if demo_file.exists():
+        try:
+            with open(demo_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[WARNING] Could not load demo_data.json: {e}")
+            return None
+    return None
+
+
+def get_demo_analysis_result(jd_name: str, resume_name: str) -> Dict[str, Any]:
+    """
+    Generate a realistic mock analysis result for DEMO_MODE.
+    
+    First tries to load from cached demo_data.json file for instant results.
+    Falls back to generating mock data if cache doesn't exist.
+    
+    Args:
+        jd_name: Name of the job description file
+        resume_name: Name of the resume file
+        
+    Returns:
+        Dict matching the structure returned by agent.answer_question()
+    """
+    # Try to load from cached demo data first
+    cached_data = load_cached_demo_data()
+    if cached_data and 'analysis_result' in cached_data:
+        # Use cached data - this is instant!
+        result = cached_data['analysis_result'].copy()
+        # Update source file names to match current selection
+        for source in result.get('sources', []):
+            if source.get('source') == 'jd_demo.pdf':
+                source['source'] = jd_name if jd_name else 'jd_demo.pdf'
+            if source.get('source') == 'resume_demo.pdf':
+                source['source'] = resume_name if resume_name else 'resume_demo.pdf'
+        return result
+    
+    # Fallback: Generate mock data if cache doesn't exist
+    return {
+        'match_score': 72,
+        'missing_keywords': ['kubernetes', 'docker', 'terraform', 'aws', 'microservices', 'graphql', 'redis', 'elasticsearch'],
+        'matched_keywords': ['python', 'javascript', 'react', 'node.js', 'postgresql', 'mongodb', 'git', 'rest', 'api', 'agile'],
+        'bullet_rewrites': [
+            "Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes",
+            "Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques",
+            "Built RESTful APIs and GraphQL endpoints, measured by serving 1M+ requests daily, by implementing Node.js and Express.js backend services",
+            "Implemented CI/CD pipelines and infrastructure as code, measured by 80% faster deployment cycles, by using Terraform and AWS cloud services",
+            "Led agile development team of 5 engineers, measured by 30% increase in sprint velocity, by implementing scrum methodologies and code review processes"
+        ],
+        'suggested_projects': [
+            {
+                'project_idea': 'Containerized Microservices Application',
+                'technologies': ['Docker', 'Kubernetes', 'Node.js', 'PostgreSQL'],
+                'aligns_with': 'Cloud infrastructure and microservices architecture requirements'
+            },
+            {
+                'project_idea': 'AWS Serverless API with GraphQL',
+                'technologies': ['AWS Lambda', 'GraphQL', 'DynamoDB', 'API Gateway'],
+                'aligns_with': 'Cloud services and modern API development needs'
+            },
+            {
+                'project_idea': 'Infrastructure as Code with Terraform',
+                'technologies': ['Terraform', 'AWS', 'Docker', 'CI/CD'],
+                'aligns_with': 'DevOps and cloud infrastructure requirements'
+            }
+        ],
+        'answer': """## Resume Match Analysis
+
+**Match Score:** 72/100
+
+✅ **Good match** with some areas for improvement.
+
+## 📋 Job Requirements Summary
+
+**Must-Have Skills:** Python, JavaScript, React, Node.js, PostgreSQL, MongoDB, Docker, Kubernetes
+**Tools/Technologies:** AWS, Terraform, GraphQL, Redis, Elasticsearch, Git, REST API
+
+## 🔍 Identified Gaps
+
+**Missing Must-Have Skills:** Kubernetes, Docker, Terraform, AWS, Microservices, GraphQL, Redis, Elasticsearch
+
+## 💡 Recommendations
+
+🔴 **1. Add Cloud Infrastructure Experience**
+   *The job requires AWS, Docker, and Kubernetes experience. Consider adding projects or certifications in these areas.*
+
+🟡 **2. Highlight Microservices Architecture**
+   *Emphasize any distributed systems or microservices work you've done, even if not explicitly labeled as such.*
+
+🟡 **3. Include DevOps Tools**
+   *Add Terraform, CI/CD pipelines, and infrastructure automation to your skills section.*
+
+## ✏️ Suggested Bullet Rewrites (XYZ Format)
+
+**1. Developed scalable microservices architecture, measured by 40% reduction in response time, by implementing containerization with Docker and Kubernetes**
+   *Original:* Worked on backend services
+   *Why:* Adds specific technologies and quantified impact
+
+**2. Optimized database queries and caching strategies, measured by 60% improvement in API performance, by using Redis and PostgreSQL optimization techniques**
+   *Original:* Improved database performance
+   *Why:* Includes specific tools and measurable results
+""",
+        'sources': [
+            {'source': jd_name, 'page': 1, 'chunk_id': 0, 'score': 0.85, 'preview': 'Job requirements include Python, JavaScript, React, and cloud infrastructure...'},
+            {'source': jd_name, 'page': 1, 'chunk_id': 1, 'score': 0.82, 'preview': 'Experience with Docker, Kubernetes, and AWS is required...'},
+            {'source': resume_name, 'page': 1, 'chunk_id': 0, 'score': 0.78, 'preview': 'Developed web applications using Python and JavaScript...'},
+            {'source': resume_name, 'page': 1, 'chunk_id': 1, 'score': 0.75, 'preview': 'Worked with databases including PostgreSQL and MongoDB...'}
+        ]
+    }
+
+
 def check_ollama():
     """Check if Ollama is running."""
     try:
@@ -937,8 +1059,58 @@ if st.session_state.get('analysis_result'):
         st.markdown("### 📈 Skill Gap Analytics")
         st.markdown("Fast keyword-based analysis of skills overlap and gaps")
         
-        # Get JD and Resume chunks for analytics
-        if st.session_state.agent and st.session_state.selected_jd:
+        # ============================================================================
+        # DEMO MODE: Use cached analytics data
+        # ============================================================================
+        if DEMO_MODE and st.session_state.get('demo_analytics'):
+            gap_analysis = st.session_state.demo_analytics
+            # Display cached analytics data
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Match Score", f"{gap_analysis.get('overlap_percentage', 72)}%")
+            with col2:
+                st.metric("JD Keywords", gap_analysis.get('jd_keyword_count', 25))
+            with col3:
+                st.metric("Resume Keywords", gap_analysis.get('resume_keyword_count', 18))
+            
+            # Show charts using cached data
+            if gap_analysis.get('missing_keywords_with_freq'):
+                st.markdown("#### Top Missing Keywords (by frequency in JD)")
+                df_missing = pd.DataFrame(
+                    gap_analysis['missing_keywords_with_freq'],
+                    columns=['Keyword', 'Frequency']
+                )
+                fig_bar = px.bar(
+                    df_missing.head(15),
+                    x='Frequency',
+                    y='Keyword',
+                    orientation='h',
+                    color='Frequency',
+                    color_continuous_scale='Reds',
+                    title='Top 15 Missing Keywords'
+                )
+                fig_bar.update_layout(
+                    height=500,
+                    yaxis={'categoryorder': 'total ascending'},
+                    xaxis_title="Frequency in Job Description",
+                    yaxis_title="Keywords"
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # Display missing keywords list
+                with st.expander("📋 All Missing Keywords"):
+                    for keyword, freq in gap_analysis['missing_keywords_with_freq']:
+                        st.write(f"• **{keyword}** (appears {freq} time{'s' if freq > 1 else ''} in JD)")
+            
+            if gap_analysis.get('present_keywords'):
+                st.markdown("---")
+                st.markdown("#### ✅ Present Keywords (Good Matches)")
+                present_text = ", ".join(gap_analysis['present_keywords'][:30])
+                st.info(present_text)
+                if len(gap_analysis['present_keywords']) > 30:
+                    st.caption(f"... and {len(gap_analysis['present_keywords']) - 30} more")
+        # Get JD and Resume chunks for analytics (production mode)
+        elif st.session_state.agent and st.session_state.selected_jd:
             with st.spinner("🔍 Computing skill gap analytics..."):
                 try:
                     # Get selected JD and Resume names
