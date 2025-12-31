@@ -692,15 +692,33 @@ IMPORTANT:
         # Convert to old format
         structured = result.get('structured_data', {})
         
-        # Handle bullet_rewrites - check both top-level and structured_data
-        bullet_rewrites = result.get('bullet_rewrites', []) or structured.get('bullet_rewrites', [])
+        # Handle bullet_rewrites - check multiple locations
+        bullet_rewrites = result.get('bullet_rewrites', [])
+        
+        # Also check structured_data.recommendations.bullet_rewrites
+        if not bullet_rewrites:
+            recommendations = structured.get('recommendations', {})
+            if isinstance(recommendations, dict):
+                bullet_rewrites = recommendations.get('bullet_rewrites', [])
+        
+        # Also check structured_data.bullet_rewrites directly
+        if not bullet_rewrites:
+            bullet_rewrites = structured.get('bullet_rewrites', [])
+        
+        # Process bullet_rewrites format
         if bullet_rewrites:
-            if isinstance(bullet_rewrites[0], dict):
-                bullet_rewrites = [b.get('rewritten', '') if isinstance(b, dict) else str(b) for b in bullet_rewrites]
+            # Handle list of dicts
+            if isinstance(bullet_rewrites, list) and len(bullet_rewrites) > 0:
+                if isinstance(bullet_rewrites[0], dict):
+                    bullet_rewrites = [b.get('rewritten', b.get('text', str(b))) if isinstance(b, dict) else str(b) for b in bullet_rewrites]
+                else:
+                    bullet_rewrites = [str(b) for b in bullet_rewrites if b]  # Filter out empty strings
             else:
-                bullet_rewrites = [str(b) for b in bullet_rewrites]
+                bullet_rewrites = []
         else:
             bullet_rewrites = []
+        
+        print(f"[DEBUG] answer_question: Extracted {len(bullet_rewrites)} bullet rewrites: {bullet_rewrites}")
         
         # Handle suggested_projects - could be list of strings or list of dicts
         recommendations = structured.get('recommendations', {})

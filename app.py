@@ -729,7 +729,14 @@ if st.session_state.get('analysis_result'):
         jd_for_questions = st.session_state.selected_jd_name
         st.markdown(f"Questions tailored to **{jd_for_questions}**")
         
-        if 'interview_questions' not in st.session_state or st.session_state.get('last_jd') != jd_for_questions:
+        # Always try to generate if JD changed or questions don't exist
+        should_generate = (
+            'interview_questions' not in st.session_state or 
+            not st.session_state.get('interview_questions') or
+            st.session_state.get('last_jd') != jd_for_questions
+        )
+        
+        if should_generate:
             if jd_for_questions and st.session_state.agent:
                 # Check Ollama connection first
                 if not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
