@@ -220,9 +220,10 @@ def generate_interview_questions(agent: JobAgent, jd_name: str) -> List[str]:
         print("[WARNING] LLM client is None - cannot generate interview questions")
         return []
     
-    if not agent.llm.check_connection():
-        print("[WARNING] LLM connection check failed - cannot generate interview questions")
-        return []
+    # Check connection but try anyway (might be false negative)
+    connection_ok = agent.llm.check_connection()
+    if not connection_ok:
+        print("[WARNING] LLM connection check failed, but attempting generation anyway...")
     
     retriever = agent.retriever
     jd_chunks = retriever.retrieve(
@@ -278,21 +279,81 @@ IMPORTANT:
     questions = []
     # Look for numbered questions
     lines = response.split('\n')
+    in_questions_section = False
+    
+    # First pass: Try to find questions section
+    for line in lines:
+        line_upper = line.upper().strip()
+        if 'INTERVIEW QUESTIONS' in line_upper or ('QUESTIONS:' in line_upper and 'INTERVIEW' not in line_upper):
+            in_questions_section = True
+            break
+    
+    # If no section header found, assume all lines are questions
+    if not in_questions_section:
+        in_questions_section = True
+    
+    # Parse questions from lines
     for line in lines:
         line = line.strip()
-        # Match patterns like "1. Question" or "1) Question" or "- Question"
+        if not line:
+            continue
+        
+        # Skip section headers
+        if 'INTERVIEW QUESTIONS' in line.upper() or (line.upper().startswith('QUESTIONS:') and len(line) < 50):
+            continue
+        
+        # Match patterns like "1. Question" or "1) Question"
         match = re.match(r'^\d+[.)]\s*(.+)', line)
         if match:
             question_text = match.group(1).strip()
+            # Remove question mark if at start (some LLMs add it)
+            question_text = re.sub(r'^\?\s*', '', question_text)
+            # Remove any trailing punctuation that's not a question mark
+            question_text = question_text.rstrip('.,;:')
             if question_text and len(question_text) > 10:
+                # Ensure it ends with a question mark
+                if not question_text.endswith('?'):
+                    question_text += '?'
                 questions.append(question_text)
-        elif line and line.startswith('-') and len(line) > 10 and '?' in line:
-            questions.append(line[1:].strip())
-        elif line and len(line) > 15 and '?' in line and not line.startswith('INTERVIEW'):
-            questions.append(line)
+        elif line and (line.startswith('-') or line.startswith('•') or line.startswith('*')) and len(line) > 15:
+            # Bullet point question
+            q = re.sub(r'^[-•*]\s*', '', line).strip()
+            q = re.sub(r'^\d+[.)]\s*', '', q)  # Remove any numbering
+            q = re.sub(r'^\?\s*', '', q)
+            q = q.rstrip('.,;:')
+            if q and len(q) > 10:
+                if not q.endswith('?'):
+                    q += '?'
+                questions.append(q)
+        elif line and len(line) > 20 and ('?' in line or line.endswith('?')):
+            # Direct question line (must contain question mark or end with it)
+            q = line.strip()
+            q = re.sub(r'^\d+[.)]\s*', '', q)  # Remove any numbering
+            q = re.sub(r'^[-•*]\s*', '', q)  # Remove bullets
+            q = re.sub(r'^\?\s*', '', q)
+            q = q.rstrip('.,;:')
+            # Skip if it looks like a header or explanation
+            if q and len(q) > 15 and not q.upper().startswith(('INTERVIEW', 'QUESTION', 'BASED', 'GENERATE', 'IMPORTANT', 'FORMAT')):
+                if not q.endswith('?'):
+                    q += '?'
+                questions.append(q)
     
-    print(f"[DEBUG] Parsed {len(questions)} interview questions")
-    return questions[:10]  # Return up to 10 questions
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_questions = []
+    for q in questions:
+        q_lower = q.lower().strip()
+        if q_lower not in seen and len(q) > 10:
+            seen.add(q_lower)
+            unique_questions.append(q)
+    
+    print(f"[DEBUG] Parsed {len(unique_questions)} interview questions from response")
+    if unique_questions:
+        print(f"[DEBUG] First question: {unique_questions[0][:100]}")
+    else:
+        print(f"[DEBUG] WARNING: No questions parsed! Response preview: {response[:500]}")
+    
+    return unique_questions[:10]  # Return up to 10 questions
 
 
 # Sidebar: File list and ingestion
@@ -686,11 +747,17 @@ if st.session_state.get('analysis_result'):
         
         bullet_rewrites = result.get('bullet_rewrites', [])
         
-        # Also check detailed analysis for bullet rewrites
-        if not bullet_rewrites and st.session_state.get('detailed_analysis'):
-            bullet_rewrites = st.session_state.detailed_analysis.get('bullet_rewrites', [])
+        # Ensure bullet_rewrites is a list
+        if bullet_rewrites and not isinstance(bullet_rewrites, list):
+            bullet_rewrites = [bullet_rewrites] if bullet_rewrites else []
         
-        if bullet_rewrites:
+        # Also check detailed analysis for bullet rewrites
+        if (not bullet_rewrites or len(bullet_rewrites) == 0) and st.session_state.get('detailed_analysis'):
+            bullet_rewrites = st.session_state.detailed_analysis.get('bullet_rewrites', [])
+            if bullet_rewrites and not isinstance(bullet_rewrites, list):
+                bullet_rewrites = [bullet_rewrites] if bullet_rewrites else []
+        
+        if bullet_rewrites and len(bullet_rewrites) > 0:
             for i, bullet in enumerate(bullet_rewrites, 1):
                 # Handle both string and dict formats
                 if isinstance(bullet, dict):
@@ -714,7 +781,24 @@ if st.session_state.get('analysis_result'):
                 else:
                     st.info("💡 Bullet rewrites will appear here after running the analysis.")
             else:
-                st.info("💡 No bullet rewrites generated yet. Run the comparison to generate bullet rewrites.")
+                # Check if analysis was run
+                if st.session_state.get('analysis_result'):
+                    st.warning("⚠️ Bullet rewrites were not generated. This might happen if:")
+                    st.markdown("""
+                    - Ollama is not running or has insufficient memory
+                    - Resume bullets could not be extracted
+                    - LLM generation failed
+                    
+                    **Try:**
+                    1. Ensure Ollama is running: Open PowerShell and run `ollama serve`
+                    2. If you see memory errors: Close other applications and restart Ollama
+                    3. Re-run the comparison after ensuring Ollama is working
+                    4. Check the console output for detailed error messages
+                    
+                    **Note:** If you see "requires more system memory" error, you need to free up RAM or restart your computer.
+                    """)
+                else:
+                    st.info("💡 No bullet rewrites generated yet. Run the comparison to generate bullet rewrites.")
         
         st.markdown("---")
         st.markdown("""
@@ -729,67 +813,69 @@ if st.session_state.get('analysis_result'):
         jd_for_questions = st.session_state.selected_jd_name
         st.markdown(f"Questions tailored to **{jd_for_questions}**")
         
-        # Always try to generate if JD changed or questions don't exist
-        should_generate = (
+        # Check if we need to generate questions
+        needs_generation = (
             'interview_questions' not in st.session_state or 
             not st.session_state.get('interview_questions') or
+            len(st.session_state.get('interview_questions', [])) == 0 or
             st.session_state.get('last_jd') != jd_for_questions
         )
         
-        if should_generate:
-            if jd_for_questions and st.session_state.agent:
-                # Check Ollama connection first
-                if not st.session_state.llm_client or not st.session_state.llm_client.check_connection():
-                    st.warning("⚠️ Ollama is not running. Interview questions require Ollama.")
-                    st.info("💡 To generate interview questions:\n1. Open PowerShell\n2. Run: `ollama serve`\n3. Wait for 'Ollama is running'\n4. Refresh this page")
-                    st.session_state.interview_questions = []
-                else:
-                    with st.spinner(f"Generating interview questions for {jd_for_questions}..."):
-                        try:
-                            questions = generate_interview_questions(
-                                st.session_state.agent, 
-                                jd_for_questions
-                            )
-                            # Questions should already be a list from the updated function
-                            if isinstance(questions, list) and questions:
-                                st.session_state.interview_questions = questions[:10]
-                            elif isinstance(questions, str):
-                                # Fallback parsing if still a string
-                                import re
-                                question_lines = []
-                                lines = questions.split('\n')
-                                for line in lines:
-                                    line = line.strip()
-                                    # Match patterns like "1. Question" or "1) Question" or "- Question"
-                                    match = re.match(r'^\d+[.)]\s*(.+)', line)
-                                    if match:
-                                        question_lines.append(match.group(1).strip())
-                                    elif line.startswith('-') and len(line) > 10 and '?' in line:
-                                        question_lines.append(line[1:].strip())
-                                    elif len(line) > 15 and '?' in line and not line.startswith('INTERVIEW'):
-                                        question_lines.append(line)
-                                st.session_state.interview_questions = question_lines[:10] if question_lines else []
-                            else:
-                                st.session_state.interview_questions = []
-                            st.session_state.last_jd = jd_for_questions
-                        except Exception as e:
-                            st.error(f"Error generating questions: {e}")
-                            with st.expander("Technical Details"):
-                                st.exception(e)
-                            st.session_state.interview_questions = []
-            else:
-                st.warning("⚠️ Please select a JD to generate interview questions")
+        # Generate questions if needed
+        if needs_generation and jd_for_questions and st.session_state.agent:
+            if not st.session_state.llm_client:
+                st.warning("⚠️ LLM client not initialized. Please rebuild index.")
                 st.session_state.interview_questions = []
+            else:
+                with st.spinner(f"Generating interview questions for {jd_for_questions}..."):
+                    try:
+                        questions = generate_interview_questions(
+                            st.session_state.agent, 
+                            jd_for_questions
+                        )
+                        # Questions should already be a list from the updated function
+                        if isinstance(questions, list) and questions and len(questions) > 0:
+                            st.session_state.interview_questions = questions[:10]
+                            st.session_state.last_jd = jd_for_questions
+                            st.success(f"✅ Generated {len(questions)} interview questions!")
+                        else:
+                            st.warning("⚠️ No interview questions were generated. This might happen if Ollama is not running or generation failed.")
+                            st.info("💡 Try: 1. Ensure Ollama is running (`ollama serve`) 2. Check console for error messages")
+                            st.session_state.interview_questions = []
+                    except Exception as e:
+                        st.error(f"Error generating questions: {e}")
+                        st.info("💡 Try: 1. Ensure Ollama is running (`ollama serve`) 2. Refresh the page")
+                        with st.expander("Technical Details"):
+                            st.exception(e)
+                        st.session_state.interview_questions = []
+        elif not jd_for_questions:
+            st.warning("⚠️ Please select a JD to generate interview questions")
+            st.session_state.interview_questions = []
+        elif not st.session_state.agent:
+            st.warning("⚠️ Agent not initialized. Please rebuild index.")
+            st.session_state.interview_questions = []
         
-        if st.session_state.get('interview_questions'):
-            for i, question in enumerate(st.session_state.interview_questions, 1):
-                st.markdown(f"""
-                <div style="background: #1e1e2e; padding: 1rem; border-radius: 6px; margin: 0.5rem 0; border-left: 3px solid #667eea; color: #fafafa;">
-                    <strong>Q{i}:</strong> {question}
-                </div>
-                """, unsafe_allow_html=True)
+        # Show interview questions if available
+        interview_questions = st.session_state.get('interview_questions', [])
+        if interview_questions and len(interview_questions) > 0:
+            st.markdown("---")
+            for i, question in enumerate(interview_questions, 1):
+                if question and len(str(question).strip()) > 0:  # Only show non-empty questions
+                    st.markdown(f"""
+                    <div style="background: #1e1e2e; padding: 1rem; border-radius: 6px; margin: 0.5rem 0; border-left: 3px solid #667eea; color: #fafafa;">
+                        <strong>Q{i}:</strong> {question}
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
-            st.info("💡 Interview questions will be generated here.")
+            if needs_generation and jd_for_questions and st.session_state.agent:
+                # Already showed error/warning above
+                pass
+            elif not jd_for_questions:
+                st.info("💡 Please select a JD first, then interview questions will be generated automatically.")
+            elif not st.session_state.agent:
+                st.info("💡 Please rebuild the index first.")
+            else:
+                st.info("💡 Interview questions will be generated here automatically when you select a JD and run the comparison.")
         
         st.markdown("---")
         st.info("💡 **Tip:** Prepare STAR (Situation, Task, Action, Result) format answers for behavioral questions.")

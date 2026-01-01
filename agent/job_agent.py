@@ -102,10 +102,13 @@ class JobAgent:
                         'requirements': {},
                         'resume_evidence': {},
                         'gaps': {'must_have_skills_missing': [], 'tools_missing': []},
-                        'recommendations': []
+                        'recommendations': {'bullet_rewrites': []},
+                        'bullet_rewrites': []
                     },
                     'markdown_report': "## Error\n\nNo relevant information found in the indexed documents.",
-                    'sources': []
+                    'sources': [],
+                    'bullet_rewrites': [],
+                    'matched_keywords': []
                 }
             
             # Use keyword-based analysis - TECH KEYWORDS ARE PRIMARY
@@ -151,17 +154,34 @@ class JobAgent:
             # Generate bullet rewrites using LLM
             bullet_rewrites = []
             try:
-                if self.llm:
-                    # Check connection
-                    if not self.llm.check_connection():
-                        print("[WARNING] LLM connection check failed - skipping bullet rewrite generation")
-                    else:
-                        # Get sample resume bullets (extract from resume text)
-                        resume_bullets = self._extract_resume_bullets(resume_text)
-                        print(f"[DEBUG] Extracted {len(resume_bullets)} resume bullets for rewriting")
+                if not self.llm:
+                    print("[WARNING] LLM client is None - cannot generate bullet rewrites")
+                else:
+                    # Get sample resume bullets (extract from resume text)
+                    resume_bullets = self._extract_resume_bullets(resume_text)
+                    print(f"[DEBUG] Extracted {len(resume_bullets)} resume bullets for rewriting")
+                    print(f"[DEBUG] Resume text length: {len(resume_text)}")
+                    
+                    if not resume_bullets:
+                        print("[WARNING] No resume bullets found to rewrite")
+                        # Try to create bullets from resume text if extraction failed
+                        if resume_text and len(resume_text) > 100:
+                            # Extract sentences that look like achievements
+                            sentences = re.split(r'[.!?]\s+', resume_text)
+                            for sentence in sentences[:10]:
+                                sentence = sentence.strip()
+                                if len(sentence) > 30 and (re.search(r'\d+%|\d+\s*(years|months|users|customers|projects|team|people)', sentence, re.IGNORECASE) or 
+                                    re.match(r'^(Developed|Implemented|Created|Built|Designed|Managed|Led|Improved|Increased|Reduced|Optimized|Deployed)', sentence, re.IGNORECASE)):
+                                    resume_bullets.append(sentence)
+                            print(f"[DEBUG] Created {len(resume_bullets)} bullets from resume sentences")
+                    
+                    if resume_bullets:
+                        # Check connection - but try anyway if check fails (might be false negative)
+                        connection_ok = self.llm.check_connection()
+                        if not connection_ok:
+                            print("[WARNING] LLM connection check failed, but attempting generation anyway...")
                         
-                        if resume_bullets:
-                            prompt = f"""You are a resume coach. Rewrite resume bullet points to better match this job description.
+                        prompt = f"""You are a resume coach. Rewrite resume bullet points to better match this job description.
 
 === JOB DESCRIPTION ===
 {jd_text[:2000]}
@@ -177,16 +197,25 @@ Rewrite 5 resume bullets in XYZ format to better match the job description:
 Format each bullet as a single line starting with a verb. Use phrases and keywords from the job description.
 
 Return ONLY the 5 rewritten bullets, one per line, numbered 1-5. No explanations, no markdown."""
-                            
-                            print("[DEBUG] Calling LLM to generate bullet rewrites...")
+                        
+                        print("[DEBUG] Calling LLM to generate bullet rewrites...")
+                        print(f"[DEBUG] Prompt length: {len(prompt)}")
+                        try:
                             llm_response = self.llm.generate(prompt, temperature=0.7)
-                            print(f"[DEBUG] LLM response length: {len(llm_response)}")
+                            print(f"[DEBUG] LLM response received, length: {len(llm_response)}")
+                            print(f"[DEBUG] LLM response preview: {llm_response[:200]}")
                             bullet_rewrites = self._parse_bullet_rewrites(llm_response)
                             print(f"[DEBUG] Generated {len(bullet_rewrites)} bullet rewrites: {bullet_rewrites}")
-                        else:
-                            print("[WARNING] No resume bullets found to rewrite")
-                else:
-                    print("[WARNING] LLM client is None - cannot generate bullet rewrites")
+                        except ConnectionError as ce:
+                            print(f"[ERROR] Connection error during bullet rewrite generation: {ce}")
+                            bullet_rewrites = []
+                        except Exception as gen_error:
+                            print(f"[ERROR] Generation error: {gen_error}")
+                            import traceback
+                            traceback.print_exc()
+                            bullet_rewrites = []
+                    else:
+                        print("[WARNING] No resume bullets available for rewriting")
             except Exception as e:
                 print(f"[ERROR] Bullet rewrite generation failed: {e}")
                 import traceback
@@ -229,16 +258,21 @@ Return ONLY the 5 rewritten bullets, one per line, numbered 1-5. No explanations
             }
         except Exception as e:
             print(f"[ERROR] Fallback analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'structured_data': {
                     'match_score': 0,
                     'requirements': {},
                     'resume_evidence': {},
                     'gaps': {},
-                    'recommendations': []
+                    'recommendations': {'bullet_rewrites': []},
+                    'bullet_rewrites': []
                 },
                 'markdown_report': f"## Error\n\nAnalysis failed: {str(e)}",
-                'sources': []
+                'sources': [],
+                'bullet_rewrites': [],
+                'matched_keywords': []
             }
     
     def _step1_retrieve_chunks(self, selected_jd_name: str, resume_name: str, top_k: int) -> Tuple[List[Dict], List[Dict]]:
@@ -511,6 +545,10 @@ IMPORTANT:
     def _extract_resume_bullets(self, resume_text: str) -> List[str]:
         """Extract bullet points from resume text."""
         bullets = []
+        if not resume_text or len(resume_text) < 50:
+            print("[DEBUG] Resume text too short or empty")
+            return []
+        
         # Look for bullet patterns: •, -, *, or numbered lists
         lines = resume_text.split('\n')
         for line in lines:
@@ -519,7 +557,7 @@ IMPORTANT:
                 continue
             
             # Check for bullet markers (•, -, *, or common bullet chars)
-            if any(line.startswith(marker) for marker in ['•', '-', '*', '▪', '▸', '▹', '▪', '○', '●']):
+            if any(line.startswith(marker) for marker in ['•', '-', '*', '▪', '▸', '▹', '○', '●']):
                 bullet = re.sub(r'^[•\-*▪▸▹○●]\s*', '', line).strip()
                 if len(bullet) > 15:  # Only meaningful bullets
                     bullets.append(bullet)
@@ -529,7 +567,7 @@ IMPORTANT:
                 if len(bullet) > 15:
                     bullets.append(bullet)
             # Also look for lines that start with action verbs (common in resume bullets)
-            elif re.match(r'^(Developed|Implemented|Created|Built|Designed|Managed|Led|Improved|Increased|Reduced|Optimized|Deployed|Maintained|Collaborated|Designed|Architected)', line, re.IGNORECASE):
+            elif re.match(r'^(Developed|Implemented|Created|Built|Designed|Managed|Led|Improved|Increased|Reduced|Optimized|Deployed|Maintained|Collaborated|Architected|Delivered|Established|Launched|Scaled|Automated|Streamlined)', line, re.IGNORECASE):
                 if len(line) > 20:  # Only meaningful bullets
                     bullets.append(line)
         
@@ -540,11 +578,17 @@ IMPORTANT:
             for sentence in sentences:
                 sentence = sentence.strip()
                 # Look for quantified achievements (numbers, percentages, etc.)
-                if re.search(r'\d+%|\d+\s*(years|months|users|customers|projects|team)', sentence, re.IGNORECASE):
+                if re.search(r'\d+%|\d+\s*(years|months|users|customers|projects|team|people|employees|clients)', sentence, re.IGNORECASE):
                     if len(sentence) > 20 and sentence not in bullets:
+                        bullets.append(sentence)
+                # Also look for action verb sentences
+                elif re.match(r'^(Developed|Implemented|Created|Built|Designed|Managed|Led|Improved|Increased|Reduced|Optimized|Deployed|Maintained|Collaborated|Architected)', sentence, re.IGNORECASE):
+                    if len(sentence) > 25 and sentence not in bullets:
                         bullets.append(sentence)
         
         print(f"[DEBUG] Extracted {len(bullets)} resume bullets")
+        if bullets:
+            print(f"[DEBUG] Sample bullet: {bullets[0][:100]}")
         return bullets[:10]  # Return top 10 bullets
     
     def _parse_bullet_rewrites(self, llm_response: str) -> List[str]:
@@ -560,8 +604,16 @@ IMPORTANT:
             # Remove markdown formatting
             line = re.sub(r'^\*\s*', '', line)
             line = re.sub(r'^-\s*', '', line)
+            # Remove common bullet prefixes
+            line = re.sub(r'^(•|▪|▸|▹|○|●)\s*', '', line)
+            # Clean up any remaining formatting
+            line = line.strip()
             if len(line) > 20:  # Only meaningful bullets
                 bullets.append(line)
+        
+        print(f"[DEBUG] _parse_bullet_rewrites: Parsed {len(bullets)} bullets from response")
+        if bullets:
+            print(f"[DEBUG] First parsed bullet: {bullets[0][:100]}")
         
         return bullets[:5]  # Return top 5
     
@@ -692,33 +744,47 @@ IMPORTANT:
         # Convert to old format
         structured = result.get('structured_data', {})
         
-        # Handle bullet_rewrites - check multiple locations
-        bullet_rewrites = result.get('bullet_rewrites', [])
+        # Handle bullet_rewrites - check multiple locations in order of priority
+        bullet_rewrites = []
         
-        # Also check structured_data.recommendations.bullet_rewrites
+        # Priority 1: Top-level bullet_rewrites (most direct)
+        if result.get('bullet_rewrites'):
+            bullet_rewrites = result.get('bullet_rewrites', [])
+        
+        # Priority 2: structured_data.bullet_rewrites
+        if not bullet_rewrites:
+            bullet_rewrites = structured.get('bullet_rewrites', [])
+        
+        # Priority 3: structured_data.recommendations.bullet_rewrites
         if not bullet_rewrites:
             recommendations = structured.get('recommendations', {})
             if isinstance(recommendations, dict):
                 bullet_rewrites = recommendations.get('bullet_rewrites', [])
         
-        # Also check structured_data.bullet_rewrites directly
-        if not bullet_rewrites:
-            bullet_rewrites = structured.get('bullet_rewrites', [])
-        
-        # Process bullet_rewrites format
+        # Process bullet_rewrites format - ensure it's a list of strings
         if bullet_rewrites:
             # Handle list of dicts
             if isinstance(bullet_rewrites, list) and len(bullet_rewrites) > 0:
                 if isinstance(bullet_rewrites[0], dict):
-                    bullet_rewrites = [b.get('rewritten', b.get('text', str(b))) if isinstance(b, dict) else str(b) for b in bullet_rewrites]
+                    bullet_rewrites = [b.get('rewritten', b.get('text', str(b))) if isinstance(b, dict) else str(b) for b in bullet_rewrites if b]
                 else:
-                    bullet_rewrites = [str(b) for b in bullet_rewrites if b]  # Filter out empty strings
+                    bullet_rewrites = [str(b) for b in bullet_rewrites if b and str(b).strip()]  # Filter out empty strings
             else:
                 bullet_rewrites = []
         else:
             bullet_rewrites = []
         
-        print(f"[DEBUG] answer_question: Extracted {len(bullet_rewrites)} bullet rewrites: {bullet_rewrites}")
+        print(f"[DEBUG] answer_question: Extracted {len(bullet_rewrites)} bullet rewrites from result")
+        print(f"[DEBUG] answer_question: Result keys: {list(result.keys())}")
+        print(f"[DEBUG] answer_question: Structured keys: {list(structured.keys()) if structured else 'None'}")
+        if bullet_rewrites:
+            print(f"[DEBUG] First bullet rewrite: {bullet_rewrites[0][:100] if bullet_rewrites else 'None'}")
+        else:
+            print(f"[DEBUG] WARNING: No bullet rewrites found! Checking result structure...")
+            print(f"[DEBUG] result.get('bullet_rewrites'): {result.get('bullet_rewrites')}")
+            print(f"[DEBUG] structured.get('bullet_rewrites'): {structured.get('bullet_rewrites')}")
+            rec = structured.get('recommendations', {})
+            print(f"[DEBUG] recommendations.get('bullet_rewrites'): {rec.get('bullet_rewrites') if isinstance(rec, dict) else 'Not a dict'}")
         
         # Handle suggested_projects - could be list of strings or list of dicts
         recommendations = structured.get('recommendations', {})

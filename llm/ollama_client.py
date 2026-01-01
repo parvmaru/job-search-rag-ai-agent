@@ -73,6 +73,23 @@ class OllamaClient:
             )
             response.raise_for_status()
             return response.json().get('response', '')
+        except requests.exceptions.HTTPError as e:
+            # Handle HTTP errors (400, 500, etc.)
+            error_msg = f"Ollama server error: {e.response.status_code}"
+            if e.response.status_code == 500:
+                error_msg += "\n\nInternal server error. This usually means:\n"
+                error_msg += "1. Ollama server needs to be restarted\n"
+                error_msg += "2. The model might need to be reloaded\n"
+                error_msg += "3. Try: Stop Ollama (Ctrl+C) and run 'ollama serve' again"
+            elif e.response.status_code == 404:
+                error_msg += f"\n\nModel '{self.model}' not found. Run: ollama pull {self.model}"
+            try:
+                error_detail = e.response.json().get('error', '')
+                if error_detail:
+                    error_msg += f"\n\nDetails: {error_detail}"
+            except:
+                pass
+            raise ConnectionError(error_msg)
         except requests.exceptions.Timeout:
             raise ConnectionError(
                 "Ollama request timed out. The model might be taking too long to respond.\n\n"
